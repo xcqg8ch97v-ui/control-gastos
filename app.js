@@ -558,7 +558,6 @@ class App {
         }
 
         const categories = dataManager.getAllCategories();
-        const categoryOptions = categories.map(c => `<option value="${c.id}" ${c.id === movement.category ? 'selected' : ''}>${c.name}</option>`).join('');
 
         movements.forEach(movement => {
             const category = dataManager.getCategoryById(movement.category);
@@ -1118,9 +1117,6 @@ class App {
      * Renderiza la sección de movimientos recurrentes
      */
     renderRecurring() {
-        const container = document.getElementById('recurring-container');
-        if (!container) return;
-
         const recurring = dataManager.getRecurringMovements();
         const upcoming = dataManager.getUpcomingRecurringMovements(30);
 
