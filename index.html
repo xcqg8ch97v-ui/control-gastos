@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="PWA de Gestión de Gastos Personales">
+    <meta name="theme-color" content="#206BFF">
+    <title>Control Gastos - Gestor Personal de Finanzas</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23206BFF' width='192' height='192'/><text x='50%' y='50%' font-size='96' fill='white' text-anchor='middle' dominant-baseline='middle' font-weight='bold'>$</text></svg>">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app" class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h1 class="app-logo">💰 Control Gastos</h1>
+                <button id="theme-toggle" class="theme-toggle" aria-label="Cambiar tema">
+                    <span class="theme-icon">🌙</span>
+                </button>
+            </div>
+            
+            <nav id="main-nav" class="main-nav">
+                <button class="nav-item active" data-section="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-label">Dashboard</span>
+                </button>
+                <button class="nav-item" data-section="movements">
+                    <span class="nav-icon">📋</span>
+                    <span class="nav-label">Movimientos</span>
+                </button>
+                <button class="nav-item" data-section="add-movement">
+                    <span class="nav-icon">➕</span>
+                    <span class="nav-label">Nuevo Movimiento</span>
+                </button>
+                <button class="nav-item" data-section="import">
+                    <span class="nav-icon">📥</span>
+                    <span class="nav-label">Importar BBVA</span>
+                </button>
+                <button class="nav-item" data-section="settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-label">Ajustes</span>
+                </button>
+            </nav>
+
+            <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Plegar sidebar">
+                <span>☰</span>
+            </button>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main id="main-content" class="main-content">
+            
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="section active">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: var(--spacing-md);">
+                    <div>
+                        <h2>Dashboard</h2>
+                        <p class="section-subtitle" id="dashboard-subtitle">Resumen financiero</p>
+                    </div>
+                    <button class="btn btn-secondary print-btn" onclick="window.print()" style="white-space: nowrap;">
+                        📄 Exportar PDF
+                    </button>
+                </div>
+
+                <!-- Date Range Selector -->
+                <div class="dashboard-filter" style="margin-bottom: var(--spacing-lg); padding: var(--spacing-md); background: var(--bg-secondary); border-radius: var(--radius-md);">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="dashboard-year-filter">Año:</label>
+                            <select id="dashboard-year-filter" class="filter-input" style="padding: var(--spacing-xs) var(--spacing-sm);">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="dashboard-month-filter">Mes:</label>
+                            <select id="dashboard-month-filter" class="filter-input" style="padding: var(--spacing-xs) var(--spacing-sm);">
+                                <option value="">Todos</option>
+                                <option value="01">Enero</option>
+                                <option value="02">Febrero</option>
+                                <option value="03">Marzo</option>
+                                <option value="04">Abril</option>
+                                <option value="05">Mayo</option>
+                                <option value="06">Junio</option>
+                                <option value="07">Julio</option>
+                                <option value="08">Agosto</option>
+                                <option value="09">Septiembre</option>
+                                <option value="10">Octubre</option>
+                                <option value="11">Noviembre</option>
+                                <option value="12">Diciembre</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="dashboard-start-date">Desde:</label>
+                            <input type="date" id="dashboard-start-date" class="filter-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="dashboard-end-date">Hasta:</label>
+                            <input type="date" id="dashboard-end-date" class="filter-input">
+                        </div>
+                        <div style="display: flex; align-items: flex-end; gap: var(--spacing-sm);">
+                            <button id="dashboard-filter-btn" class="btn btn-primary" style="white-space: nowrap;">Filtrar</button>
+                            <button id="dashboard-clear-filter-btn" class="btn btn-secondary" style="white-space: nowrap;">Limpiar</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dashboard-grid">
+                    <div class="summary-card income">
+                        <span class="summary-label">Ingresos</span>
+                        <span class="summary-value" id="total-income">€0.00</span>
+                    </div>
+                    <div class="summary-card expense">
+                        <span class="summary-label">Gastos</span>
+                        <span class="summary-value" id="total-expense">€0.00</span>
+                    </div>
+                    <div class="summary-card savings">
+                        <span class="summary-label">Ahorros</span>
+                        <span class="summary-value" id="total-savings">€0.00</span>
+                    </div>
+                    <div class="summary-card balance">
+                        <span class="summary-label">Balance</span>
+                        <span class="summary-value" id="total-balance">€0.00</span>
+                    </div>
+                </div>
+
+                <div class="charts-container">
+                    <div class="chart-wrapper">
+                        <h3>Gastos por Categoría</h3>
+                        <canvas id="expenses-chart"></canvas>
+                    </div>
+                    <div class="chart-wrapper">
+                        <h3>Ingresos por Categoría</h3>
+                        <canvas id="income-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="recent-movements">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md);">
+                        <h3>Movimientos Recientes</h3>
+                        <div style="display: flex; gap: var(--spacing-sm);">
+                            <select id="recent-sort-by" class="filter-select" style="padding: var(--spacing-xs) var(--spacing-sm); border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
+                                <option value="date-desc">📅 Fecha (Reciente)</option>
+                                <option value="date-asc">📅 Fecha (Antiguo)</option>
+                                <option value="amount-desc">💰 Importe (Mayor)</option>
+                                <option value="amount-asc">💰 Importe (Menor)</option>
+                                <option value="category">📁 Categoría</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="recent-list" class="movements-list"></div>
+                </div>
+            </section>
+
+            <!-- Movements Section -->
+            <section id="movements" class="section">
+                <div class="section-header">
+                    <h2>Tabla de Movimientos</h2>
+                    <div class="section-controls">
+                        <input type="text" id="search-input" class="search-input" placeholder="Buscar movimientos...">
+                        <select id="category-filter" class="filter-select">
+                            <option value="">Todas las categorías</option>
+                        </select>
+                        <select id="movements-sort-by" class="filter-select" style="padding: var(--spacing-xs) var(--spacing-sm); border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
+                            <option value="date-desc">📅 Fecha (Reciente)</option>
+                            <option value="date-asc">📅 Fecha (Antiguo)</option>
+                            <option value="amount-desc">💰 Importe (Mayor)</option>
+                            <option value="amount-asc">💰 Importe (Menor)</option>
+                            <option value="category">📁 Categoría</option>
+                        </select>
+                        <button id="delete-selected-btn" class="btn btn-danger" style="display: none;">
+                            Eliminar Seleccionados
+                        </button>
+                        <button id="delete-all-movements-btn" class="btn btn-danger">
+                            Borrar TODO
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tabla de GASTOS -->
+                <div style="margin-bottom: var(--spacing-xl);">
+                    <h3 style="color: #FF4421; margin-bottom: var(--spacing-md);">📉 GASTOS</h3>
+                    <div class="table-responsive">
+                        <table class="movements-table">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="select-all-expenses" class="select-all-checkbox"></th>
+                                    <th>Fecha</th>
+                                    <th>Descripción</th>
+                                    <th>Observaciones</th>
+                                    <th>Categoría</th>
+                                    <th>Monto</th>
+                                    <th>Computable</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="movements-tbody-expenses">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tabla de INGRESOS -->
+                <div>
+                    <h3 style="color: #A8E571; margin-bottom: var(--spacing-md);">📈 INGRESOS</h3>
+                    <div class="table-responsive">
+                        <table class="movements-table">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" id="select-all-income" class="select-all-checkbox"></th>
+                                    <th>Fecha</th>
+                                    <th>Descripción</th>
+                                    <th>Observaciones</th>
+                                    <th>Categoría</th>
+                                    <th>Monto</th>
+                                    <th>Computable</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="movements-tbody-income">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Total Filtrado -->
+                <div class="total-summary" style="margin-top: var(--spacing-lg); padding: var(--spacing-lg); background: var(--bg-secondary); border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 600; color: var(--text-primary);">Total de montos (ingresos + gastos):</span>
+                    <span id="filtered-total" style="font-size: var(--font-size-lg); font-weight: bold; color: var(--accent-primary);">€0.00</span>
+                </div>
+            </section>
+
+            <!-- Add Movement Section -->
+            <section id="add-movement" class="section">
+                <div class="section-header">
+                    <h2>Nuevo Movimiento</h2>
+                    <p class="section-subtitle">Registra un ingreso, gasto o ahorro</p>
+                </div>
+
+                <form id="movement-form" class="movement-form">
+                    <div class="form-group">
+                        <label for="form-date">Fecha *</label>
+                        <input type="date" id="form-date" name="date" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="form-description">Descripción *</label>
+                        <input type="text" id="form-description" name="description" placeholder="Ej: Compra en Mercadona" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="form-category">Categoría *</label>
+                            <select id="form-category" name="category" required>
+                                <option value="">Selecciona una categoría</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="form-type">Tipo *</label>
+                            <select id="form-type" name="type" required>
+                                <option value="">Selecciona tipo</option>
+                                <option value="income">Ingreso 📈</option>
+                                <option value="expense">Gasto 📉</option>
+                                <option value="savings">Ahorro 💰</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="form-amount">Monto (€) *</label>
+                            <input type="number" id="form-amount" name="amount" step="0.01" min="0" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="form-computable">
+                                <input type="checkbox" id="form-computable" name="computable" checked>
+                                Computable
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="form-observations">Observaciones (opcional)</label>
+                        <input type="text" id="form-observations" name="observations" placeholder="Ej: Detalles adicionales...">
+                    </div>
+
+                    <div id="split-container" style="display: none;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enable-split" name="enable-split">
+                            Gasto compartido (split)
+                        </label>
+                        <div id="split-details" style="display: none;">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="form-split-amount">Monto a dividir (€)</label>
+                                    <input type="number" id="form-split-amount" name="split-amount" step="0.01" min="0" value="0">
+                                </div>
+                                <div class="form-group">
+                                    <label for="form-split-people">Número de personas</label>
+                                    <input type="number" id="form-split-people" name="split-people" min="2" value="2">
+                                </div>
+                            </div>
+                            <div class="split-result">
+                                <p><strong>Tu parte: <span id="split-your-part">€0.00</span></strong></p>
+                                <label class="checkbox-label" style="margin-top: var(--spacing-md);">
+                                    <input type="checkbox" id="split-your-part-computable" checked>
+                                    Tu parte es computable
+                                </label>
+                                <p style="font-size: var(--font-size-xs); color: var(--text-secondary); margin-top: var(--spacing-sm);">
+                                    Si desactivas, esta parte no afectará el balance ni gráficos
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" style="transition: all 0.3s ease;">Guardar Movimiento</button>
+                        <button type="reset" class="btn btn-secondary">Limpiar</button>
+                        <button type="button" id="cancel-edit-btn" class="btn btn-secondary" style="display: none;">Cancelar Edición</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Import BBVA Section -->
+            <section id="import" class="section">
+                <div class="section-header">
+                    <h2>Importador BBVA</h2>
+                    <p class="section-subtitle">Importa movimientos desde archivos CSV o XLSX</p>
+                </div>
+
+                <div class="import-area">
+                    <div id="drop-zone" class="drop-zone">
+                        <span class="drop-icon">📁</span>
+                        <p>Arrastra aquí tu archivo CSV o XLSX</p>
+                        <p class="drop-hint">O haz clic para seleccionar</p>
+                        <input type="file" id="file-input" class="file-input" accept=".csv,.xlsx" style="display: none;">
+                    </div>
+
+                    <div id="import-preview" class="import-preview" style="display: none;">
+                        <h3>Vista Previa de Importación</h3>
+                        <div class="table-responsive">
+                            <table class="import-table">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Descripción</th>
+                                        <th>Monto</th>
+                                        <th>Categoría (Detectada)</th>
+                                        <th>Computable</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="import-tbody">
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="form-actions">
+                            <button id="confirm-import-btn" class="btn btn-primary">Confirmar Importación</button>
+                            <button id="cancel-import-btn" class="btn btn-secondary">Cancelar</button>
+                        </div>
+                    </div>
+
+                    <div id="import-message" class="import-message" style="display: none;"></div>
+                </div>
+
+                <div class="category-mapping">
+                    <h3>Mapeo Automático de Categorías</h3>
+                    <p class="info-text">El sistema detecta automáticamente categorías basadas en descripciones.</p>
+                    <div id="mapping-list" class="mapping-list"></div>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section id="settings" class="section">
+                <div class="section-header">
+                    <h2>Ajustes</h2>
+                    <p class="section-subtitle">Gestiona tu aplicación</p>
+                </div>
+
+                <div class="settings-group">
+                    <h3>Categorías Personalizadas</h3>
+                    <p class="info-text">Crea nuevas categorías para organizar mejor tus movimientos</p>
+                    
+                    <div id="new-category-form" class="form-group" style="margin-bottom: var(--spacing-lg);">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="new-category-name">Nombre de la categoría *</label>
+                                <input type="text" id="new-category-name" placeholder="Ej: Gym, Subscripciones...">
+                            </div>
+                            <div class="form-group">
+                                <label for="new-category-type">Tipo *</label>
+                                <select id="new-category-type">
+                                    <option value="expense">Gasto</option>
+                                    <option value="income">Ingreso</option>
+                                    <option value="savings">Ahorro</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="new-category-color">Color</label>
+                                <input type="color" id="new-category-color" value="#206BFF">
+                            </div>
+                        </div>
+                        <button type="button" id="add-category-btn" class="btn btn-primary">Agregar Categoría</button>
+                    </div>
+
+                    <div id="custom-categories-list"></div>
+                </div>
+
+                <div class="settings-group">
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <span class="setting-title">Exportar datos</span>
+                            <span class="setting-description">Descarga todos tus movimientos en JSON</span>
+                        </div>
+                        <button id="export-btn" class="btn btn-secondary">Exportar</button>
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <span class="setting-title">Importar datos</span>
+                            <span class="setting-description">Carga datos desde un archivo JSON anterior</span>
+                        </div>
+                        <input type="file" id="import-json-input" class="file-input" accept=".json" style="display: none;">
+                        <button id="import-json-btn" class="btn btn-secondary">Importar</button>
+                    </div>
+
+                    <div class="setting-item danger">
+                        <div class="setting-label">
+                            <span class="setting-title">Borrar todo</span>
+                            <span class="setting-description">Elimina permanentemente todos los datos</span>
+                        </div>
+                        <button id="clear-all-btn" class="btn btn-danger">Borrar Todos los Datos</button>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h3>Información de la Aplicación</h3>
+                    <div class="info-box">
+                        <p><strong>Versión:</strong> 1.0.0</p>
+                        <p><strong>Tipo:</strong> Progressive Web App (PWA)</p>
+                        <p><strong>Almacenamiento:</strong> localStorage del navegador</p>
+                        <p><strong>Última actualización:</strong> <span id="last-update">—</span></p>
+                        <p id="install-prompt" style="display: none;"><strong>💡 Puedes instalar esta app en tu dispositivo para acceder sin internet.</strong></p>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Chart.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- App Scripts -->
+    <script src="data.js"></script>
+    <script src="charts.js"></script>
+    <script src="app.js"></script>
+    <script src="importador.js"></script>
+</body>
+</html>
