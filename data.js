@@ -604,6 +604,477 @@ class DataManager {
 
         return movements;
     }
+
+    /* ================================
+       PRESUPUESTOS (BUDGETS)
+       ================================ */
+    
+    /**
+     * Obtiene todos los presupuestos del localStorage
+     */
+    getBudgets() {
+        try {
+            const budgets = localStorage.getItem('controlGastosBudgets');
+            return budgets ? JSON.parse(budgets) : {};
+        } catch (error) {
+            console.warn('Error loading budgets:', error);
+            return {};
+        }
+    }
+
+    /**
+     * Guarda presupuestos en localStorage
+     */
+    saveBudgets(budgets) {
+        localStorage.setItem('controlGastosBudgets', JSON.stringify(budgets));
+    }
+
+    /**
+     * Actualiza o crea un presupuesto para una categoría
+     */
+    updateBudget(categoryId, amount) {
+        const budgets = this.getBudgets();
+        budgets[categoryId] = parseFloat(amount) || 0;
+        this.saveBudgets(budgets);
+        return budgets[categoryId];
+    }
+
+    /**
+     * Obtiene el presupuesto de una categoría
+     */
+    getBudgetForCategory(categoryId) {
+        const budgets = this.getBudgets();
+        return budgets[categoryId] || 0;
+    }
+
+    /**
+     * Calcula el estado del presupuesto para una categoría (mes actual)
+     */
+    getBudgetStatus(categoryId, startDate = null, endDate = null) {
+        // Si no proporciona fechas, usa mes actual
+        if (!startDate || !endDate) {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            startDate = `${year}-${month}-01`;
+            
+            const nextMonth = parseInt(month) === 12 ? '01' : String(parseInt(month) + 1).padStart(2, '0');
+            const nextYear = parseInt(month) === 12 ? String(parseInt(year) + 1) : year;
+            const lastDay = new Date(parseInt(nextYear), parseInt(nextMonth) - 1, 0).getDate();
+            endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+        }
+
+        const budget = this.getBudgetForCategory(categoryId);
+        const spent = this.getMovementsByDateRange(startDate, endDate)
+            .filter(m => m.type === 'expense' && m.category === categoryId && m.computable)
+            .reduce((sum, m) => sum + m.amount, 0);
+
+        const percentage = budget > 0 ? (spent / budget) * 100 : 0;
+        const remaining = budget - spent;
+        const exceeded = spent > budget;
+
+        return {
+            categoryId,
+            budget,
+            spent,
+            remaining,
+            percentage: Math.min(percentage, 100),
+            exceeded,
+            warning: percentage > 80 && percentage <= 100,
+            critical: percentage > 100
+        };
+    }
+
+    /**
+     * Obtiene todos los presupuestos con sus estados para el mes actual
+     */
+    getAllBudgetStatus() {
+        const budgets = this.getBudgets();
+        const statuses = {};
+
+        Object.keys(budgets).forEach(categoryId => {
+            statuses[categoryId] = this.getBudgetStatus(categoryId);
+        });
+
+        return statuses;
+    }
+
+    /**
+     * Obtiene alertas por presupuestos excedidos
+     */
+    getBudgetAlerts() {
+        const alerts = [];
+        const statuses = this.getAllBudgetStatus();
+
+        Object.values(statuses).forEach(status => {
+            if (status.warning || status.exceeded) {
+                const category = this.getCategoryById(status.categoryId);
+                alerts.push({
+                    categoryId: status.categoryId,
+                    categoryName: category?.name || 'Desconocida',
+                    type: status.exceeded ? 'danger' : 'warning',
+                    message: status.exceeded 
+                        ? `${category?.name} ha excedido su presupuesto: €${status.spent.toFixed(2)} de €${status.budget.toFixed(2)}`
+                        : `${category?.name} está al ${status.percentage.toFixed(0)}% de su presupuesto: €${status.spent.toFixed(2)} de €${status.budget.toFixed(2)}`
+                });
+            }
+        });
+
+        return alerts;
+    }
+
+    /* ================================
+       ANÁLISIS COMPARATIVO Y TENDENCIAS
+       ================================ */
+
+    /**
+     * Obtiene gastos agrupados por mes para el último año
+     */
+    getMonthlyExpenses(months = 12) {
+        const monthlyData = {};
+        const today = new Date();
+
+        for (let i = months - 1; i >= 0; i--) {
+            const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const monthKey = `${year}-${month}`;
+
+            const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+            const startDate = `${year}-${month}-01`;
+            const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+
+            const expenses = this.getMovementsByDateRange(startDate, endDate)
+                .filter(m => m.type === 'expense')
+                .reduce((sum, m) => sum + m.amount, 0);
+
+            monthlyData[monthKey] = expenses;
+        }
+
+        return monthlyData;
+    }
+
+    /**
+     * Obtiene ingresos agrupados por mes para el último año
+     */
+    getMonthlyIncome(months = 12) {
+        const monthlyData = {};
+        const today = new Date();
+
+        for (let i = months - 1; i >= 0; i--) {
+            const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const monthKey = `${year}-${month}`;
+
+            const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+            const startDate = `${year}-${month}-01`;
+            const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+
+            const income = this.getMovementsByDateRange(startDate, endDate)
+                .filter(m => m.type === 'income')
+                .reduce((sum, m) => sum + m.amount, 0);
+
+            monthlyData[monthKey] = income;
+        }
+
+        return monthlyData;
+    }
+
+    /**
+     * Obtiene gastos del mes anterior
+     */
+    getPreviousMonthExpenses() {
+        const today = new Date();
+        const prevMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const year = prevMonth.getFullYear();
+        const month = String(prevMonth.getMonth() + 1).padStart(2, '0');
+
+        const lastDay = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0).getDate();
+        const startDate = `${year}-${month}-01`;
+        const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+
+        return this.getMovementsByDateRange(startDate, endDate)
+            .filter(m => m.type === 'expense')
+            .reduce((sum, m) => sum + m.amount, 0);
+    }
+
+    /**
+     * Obtiene gastos del mes actual
+     */
+    getCurrentMonthExpenses() {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+
+        const startDate = `${year}-${month}-01`;
+        const endDate = `${year}-${month}-${day}`;
+
+        return this.getMovementsByDateRange(startDate, endDate)
+            .filter(m => m.type === 'expense')
+            .reduce((sum, m) => sum + m.amount, 0);
+    }
+
+    /**
+     * Calcula la tendencia de gastos (mes anterior vs mes actual)
+     */
+    expenseTrend() {
+        const current = this.getCurrentMonthExpenses();
+        const previous = this.getPreviousMonthExpenses();
+        const difference = current - previous;
+        const percentChange = previous > 0 ? (difference / previous) * 100 : 0;
+
+        return {
+            currentMonth: current,
+            previousMonth: previous,
+            difference: difference,
+            percentChange: percentChange,
+            trend: difference > 0 ? 'UP' : difference < 0 ? 'DOWN' : 'STABLE'
+        };
+    }
+
+    /**
+     * Obtiene las tendencias por categoría
+     */
+    getCategoryTrends() {
+        const trends = {};
+
+        this.CATEGORIES
+            .filter(c => c.type === 'expense')
+            .forEach(category => {
+                const currentExpenses = this.getMovementsByDateRange(
+                    new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-01'
+                ).filter(m => m.category === category.id && m.type === 'expense')
+                    .reduce((sum, m) => sum + m.amount, 0);
+
+                const prevMonth = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1);
+                const previousExpenses = this.getMovementsByDateRange(
+                    prevMonth.getFullYear() + '-' + String(prevMonth.getMonth() + 1).padStart(2, '0') + '-01'
+                ).filter(m => m.category === category.id && m.type === 'expense')
+                    .reduce((sum, m) => sum + m.amount, 0);
+
+                const difference = currentExpenses - previousExpenses;
+                const percentChange = previousExpenses > 0 ? (difference / previousExpenses) * 100 : 0;
+
+                trends[category.id] = {
+                    name: category.name,
+                    current: currentExpenses,
+                    previous: previousExpenses,
+                    difference: difference,
+                    percentChange: percentChange,
+                    trend: difference > 0 ? 'UP' : difference < 0 ? 'DOWN' : 'STABLE'
+                };
+            });
+
+        return trends;
+    }
+
+    /* ================================
+       MOVIMIENTOS RECURRENTES
+       ================================ */
+
+    /**
+     * Obtiene todos los movimientos recurrentes
+     */
+    getRecurringMovements() {
+        try {
+            const recurring = localStorage.getItem('controlGastosRecurring');
+            return recurring ? JSON.parse(recurring) : [];
+        } catch (error) {
+            console.warn('Error loading recurring movements:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Guarda movimientos recurrentes
+     */
+    saveRecurringMovements(recurring) {
+        localStorage.setItem('controlGastosRecurring', JSON.stringify(recurring));
+    }
+
+    /**
+     * Agrega un nuevo movimiento recurrente
+     */
+    addRecurringMovement(movement) {
+        const recurring = this.getRecurringMovements();
+        const newRecurring = {
+            id: this.generateUUID(),
+            description: movement.description,
+            category: movement.category,
+            type: movement.type,
+            amount: parseFloat(movement.amount),
+            frequency: movement.frequency, // 'daily', 'weekly', 'monthly', 'yearly'
+            dayOfMonth: movement.dayOfMonth || null,
+            startDate: movement.startDate || new Date().toISOString().split('T')[0],
+            endDate: movement.endDate || null,
+            enabled: true,
+            lastApplied: null,
+            createdAt: new Date().toISOString()
+        };
+        recurring.push(newRecurring);
+        this.saveRecurringMovements(recurring);
+        return newRecurring;
+    }
+
+    /**
+     * Actualiza un movimiento recurrente
+     */
+    updateRecurringMovement(id, updates) {
+        const recurring = this.getRecurringMovements();
+        const index = recurring.findIndex(r => r.id === id);
+        if (index !== -1) {
+            recurring[index] = { ...recurring[index], ...updates };
+            this.saveRecurringMovements(recurring);
+            return recurring[index];
+        }
+        return null;
+    }
+
+    /**
+     * Elimina un movimiento recurrente
+     */
+    deleteRecurringMovement(id) {
+        const recurring = this.getRecurringMovements();
+        this.saveRecurringMovements(recurring.filter(r => r.id !== id));
+    }
+
+    /**
+     * Aplica los movimientos recurrentes pendientes
+     */
+    applyRecurringMovements() {
+        const recurring = this.getRecurringMovements();
+        const today = new Date().toISOString().split('T')[0];
+        const appliedMovements = [];
+
+        recurring.forEach(recur => {
+            if (!recur.enabled) return;
+
+            const lastApplied = recur.lastApplied ? new Date(recur.lastApplied) : new Date('1900-01-01');
+            const startDate = new Date(recur.startDate);
+            const endDate = recur.endDate ? new Date(recur.endDate) : new Date('2099-12-31');
+            const todayDate = new Date();
+
+            // Valida que esté dentro del rango de fechas
+            if (todayDate < startDate || todayDate > endDate) return;
+
+            let shouldApply = false;
+            let nextApplyDate = null;
+
+            switch (recur.frequency) {
+                case 'daily':
+                    shouldApply = lastApplied.toDateString() !== todayDate.toDateString();
+                    nextApplyDate = new Date(todayDate);
+                    nextApplyDate.setDate(nextApplyDate.getDate() + 1);
+                    break;
+
+                case 'weekly':
+                    const daysDiff = Math.floor((todayDate - lastApplied) / (1000 * 60 * 60 * 24));
+                    shouldApply = daysDiff >= 7;
+                    nextApplyDate = new Date(lastApplied);
+                    nextApplyDate.setDate(nextApplyDate.getDate() + 7);
+                    break;
+
+                case 'monthly':
+                    const dayOfMonth = recur.dayOfMonth || startDate.getDate();
+                    shouldApply = todayDate.getDate() === dayOfMonth && 
+                                 (lastApplied.getMonth() !== todayDate.getMonth() ||
+                                  lastApplied.getFullYear() !== todayDate.getFullYear());
+                    nextApplyDate = new Date(todayDate);
+                    nextApplyDate.setMonth(nextApplyDate.getMonth() + 1);
+                    nextApplyDate.setDate(dayOfMonth);
+                    break;
+
+                case 'yearly':
+                    const month = startDate.getMonth();
+                    const day = startDate.getDate();
+                    shouldApply = todayDate.getMonth() === month && 
+                                 todayDate.getDate() === day && 
+                                 lastApplied.getFullYear() !== todayDate.getFullYear();
+                    nextApplyDate = new Date(todayDate);
+                    nextApplyDate.setFullYear(nextApplyDate.getFullYear() + 1);
+                    break;
+            }
+
+            if (shouldApply) {
+                // Crea el movimiento
+                const movement = {
+                    date: today,
+                    description: recur.description + ' (Recurrente)',
+                    category: recur.category,
+                    type: recur.type,
+                    amount: recur.amount,
+                    computable: true,
+                    observations: `Movimiento automático recurrente (ID: ${recur.id})`
+                };
+
+                this.addMovement(movement);
+                appliedMovements.push(recur.id);
+
+                // Actualiza la fecha de aplicación
+                this.updateRecurringMovement(recur.id, { lastApplied: new Date().toISOString() });
+            }
+        });
+
+        return appliedMovements;
+    }
+
+    /**
+     * Obtiene próximas aplicaciones de movimientos recurrentes
+     */
+    getUpcomingRecurringMovements(days = 30) {
+        const recurring = this.getRecurringMovements();
+        const upcoming = [];
+        const today = new Date();
+        const futureDate = new Date(today);
+        futureDate.setDate(futureDate.getDate() + days);
+
+        recurring.forEach(recur => {
+            if (!recur.enabled) return;
+
+            const endDate = recur.endDate ? new Date(recur.endDate) : new Date('2099-12-31');
+            if (today > endDate) return;
+
+            // Calcula la próxima fecha de aplicación
+            const lastApplied = recur.lastApplied ? new Date(recur.lastApplied) : new Date(recur.startDate);
+            let nextApplyDate = new Date(lastApplied);
+
+            switch (recur.frequency) {
+                case 'daily':
+                    nextApplyDate.setDate(nextApplyDate.getDate() + 1);
+                    break;
+                case 'weekly':
+                    nextApplyDate.setDate(nextApplyDate.getDate() + 7);
+                    break;
+                case 'monthly':
+                    const dayOfMonth = recur.dayOfMonth || new Date(recur.startDate).getDate();
+                    nextApplyDate = new Date(today.getFullYear(), today.getMonth(), dayOfMonth);
+                    if (nextApplyDate <= today) {
+                        nextApplyDate.setMonth(nextApplyDate.getMonth() + 1);
+                    }
+                    break;
+                case 'yearly':
+                    const startDateObj = new Date(recur.startDate);
+                    nextApplyDate = new Date(today.getFullYear(), startDateObj.getMonth(), startDateObj.getDate());
+                    if (nextApplyDate <= today) {
+                        nextApplyDate.setFullYear(nextApplyDate.getFullYear() + 1);
+                    }
+                    break;
+            }
+
+            if (nextApplyDate <= futureDate) {
+                const category = this.getCategoryById(recur.category);
+                upcoming.push({
+                    ...recur,
+                    nextApplyDate: nextApplyDate.toISOString().split('T')[0],
+                    categoryName: category?.name || 'Desconocida'
+                });
+            }
+        });
+
+        return upcoming.sort((a, b) => new Date(a.nextApplyDate) - new Date(b.nextApplyDate));
+    }
 }
 
 // Instancia global del DataManager

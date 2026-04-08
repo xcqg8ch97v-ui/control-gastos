@@ -153,3 +153,100 @@ window.addEventListener('resize', () => {
         initCharts(startDate, endDate);
     }
 });
+
+/**
+ * Crea un gráfico de línea con tendencias mensuales de gastos
+ */
+let trendChart = null;
+
+function createTrendChart(monthlyData) {
+    const canvas = document.getElementById('monthly-trend-chart');
+    if (!canvas) return;
+
+    // Destruye gráfico anterior si existe
+    if (trendChart) {
+        trendChart.destroy();
+    }
+
+    const labels = Object.keys(monthlyData).map(month => {
+        const [year, monthNum] = month.split('-');
+        const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        return monthNames[parseInt(monthNum) - 1];
+    });
+
+    const data = Object.values(monthlyData);
+
+    const ctx = canvas.getContext('2d');
+    trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Gastos Mensuales',
+                data: data,
+                borderColor: '#FF4421',
+                backgroundColor: 'rgba(255, 68, 33, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 4,
+                pointBackgroundColor: '#FF4421',
+                pointBorderColor: 'white',
+                pointBorderWidth: 2,
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: {
+                        font: { size: 12 },
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim(),
+                        padding: 15,
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--bg-tertiary').trim(),
+                    titleColor: getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim(),
+                    bodyColor: getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim(),
+                    borderColor: getComputedStyle(document.documentElement).getPropertyValue('--border-color').trim(),
+                    borderWidth: 1,
+                    padding: 12,
+                    callbacks: {
+                        label: function(context) {
+                            return `€${context.parsed.y.toFixed(2)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--border-color').trim(),
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim(),
+                        callback: function(value) {
+                            return '€' + value.toFixed(0);
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false,
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim()
+                    }
+                }
+            }
+        }
+    });
+}

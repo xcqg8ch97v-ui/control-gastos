@@ -21,6 +21,13 @@ class App {
         this.populateYearFilter();
         this.renderDashboard();
         this.registerServiceWorker();
+        
+        // Aplica movimientos recurrentes automáticamente
+        const applied = dataManager.applyRecurringMovements();
+        if (applied.length > 0) {
+            console.log(`${applied.length} movimiento(s) recurrente(s) auto-aplicado(s)`);
+            this.renderDashboard();
+        }
     }
 
     /**
@@ -79,6 +86,7 @@ class App {
 
         // Ordenamiento en dashboard
         document.getElementById('recent-sort-by').addEventListener('change', () => this.renderRecentMovements());
+        document.getElementById('recent-limit').addEventListener('change', () => this.renderRecentMovements());
 
         // Botón de borrar todos (agregar evento)
         const deleteAllBtn = document.getElementById('delete-all-movements-btn');
@@ -202,6 +210,14 @@ class App {
             // Asegurar que las categorías estén cargadas al abrir el formulario
             this.populateCategorySelects();
             this.setDefaultDate();
+        } else if (section === 'budgets') {
+            this.populateCategorySelects();
+            this.renderBudgets();
+        } else if (section === 'analytics') {
+            this.renderAnalytics();
+        } else if (section === 'recurring') {
+            this.populateCategorySelects();
+            this.renderRecurring();
         } else if (section === 'settings') {
             this.renderCustomCategories();
         }
@@ -215,23 +231,39 @@ class App {
         
         // Para el formulario
         const formCategory = document.getElementById('form-category');
-        formCategory.innerHTML = '<option value="">Selecciona una categoría</option>';
-        categories.forEach(cat => {
-            const option = document.createElement('option');
-            option.value = cat.id;
-            option.textContent = cat.name;
-            formCategory.appendChild(option);
-        });
+        if (formCategory) {
+            formCategory.innerHTML = '<option value="">Selecciona una categoría</option>';
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.id;
+                option.textContent = cat.name;
+                formCategory.appendChild(option);
+            });
+        }
 
         // Para el filtro
         const filterCategory = document.getElementById('category-filter');
-        filterCategory.innerHTML = '<option value="">Todas las categorías</option>';
-        categories.forEach(cat => {
-            const option = document.createElement('option');
-            option.value = cat.id;
-            option.textContent = cat.name;
-            filterCategory.appendChild(option);
-        });
+        if (filterCategory) {
+            filterCategory.innerHTML = '<option value="">Todas las categorías</option>';
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.id;
+                option.textContent = cat.name;
+                filterCategory.appendChild(option);
+            });
+        }
+
+        // Para movimientos recurrentes
+        const recurringCategory = document.getElementById('recurring-category');
+        if (recurringCategory) {
+            recurringCategory.innerHTML = '<option value="">Selecciona una categoría</option>';
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.id;
+                option.textContent = cat.name;
+                recurringCategory.appendChild(option);
+            });
+        }
     }
 
     /**
@@ -386,6 +418,7 @@ class App {
     renderRecentMovements() {
         const movements = dataManager.getAllMovements();
         const sortBy = document.getElementById('recent-sort-by')?.value || 'date-desc';
+        const limit = parseInt(document.getElementById('recent-limit')?.value) || 5;
 
         // Aplicar el ordenamiento según la selección
         if (sortBy === 'date-desc') {
@@ -404,8 +437,8 @@ class App {
             });
         }
 
-        // Tomar solo los 5 primeros
-        const recentMovements = movements.slice(0, 5);
+        // Tomar solo los primeros N movimientos según el límite seleccionado
+        const recentMovements = movements.slice(0, limit);
 
         const recentList = document.getElementById('recent-list');
         recentList.innerHTML = '';
@@ -524,29 +557,49 @@ class App {
             return;
         }
 
+        const categories = dataManager.getAllCategories();
+        const categoryOptions = categories.map(c => `<option value="${c.id}" ${c.id === movement.category ? 'selected' : ''}>${c.name}</option>`).join('');
+
         movements.forEach(movement => {
             const category = dataManager.getCategoryById(movement.category);
             const row = document.createElement('tr');
             row.className = movement.computable ? '' : 'excluded';
             row.dataset.movementId = movement.id;
 
+            const categorySelect = categories.map(c => `<option value="${c.id}" ${c.id === movement.category ? 'selected' : ''}>${c.name}</option>`).join('');
+
             row.innerHTML = `
                 <td><input type="checkbox" class="item-checkbox" data-id="${movement.id}"></td>
                 <td>${movement.date}</td>
                 <td>${movement.description}</td>
                 <td style="font-size: var(--font-size-sm); color: var(--text-secondary);">${movement.observations || '—'}</td>
-                <td><span class="badge">${category?.name || movement.category}</span></td>
+                <td>
+                    <select class="category-inline" data-id="${movement.id}" style="padding: var(--spacing-xs) var(--spacing-sm); border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); cursor: pointer; font-size: var(--font-size-sm);">
+                        ${categorySelect}
+                    </select>
+                </td>
                 <td class="movement-amount ${movement.type}">
                     €${movement.amount.toFixed(2)}
                 </td>
                 <td><span class="badge ${movement.computable ? 'computable' : 'not-computable'}">
                     ${movement.computable ? '✓ Sí' : '✗ No'}
                 </span></td>
-                <td>
-                    <button class="btn btn-sm" onclick="app.editMovement('${movement.id}')">Editar</button>
-                    <button class="btn btn-sm btn-danger" onclick="app.deleteMovement('${movement.id}')">Eliminar</button>
+                <td style="white-space: nowrap;">
+                    <button class="btn btn-sm" onclick="app.editMovement('${movement.id}')" title="Editar todo">✏️</button>
+                    <button class="btn btn-sm btn-danger" onclick="app.deleteMovement('${movement.id}')" title="Eliminar">🗑️</button>
                 </td>
             `;
+
+            // Evento para cambiar categoría inline
+            row.querySelector('.category-inline')?.addEventListener('change', (e) => {
+                const newCategory = e.target.value;
+                if (newCategory) {
+                    dataManager.updateMovement(movement.id, { category: newCategory });
+                    this.showNotification('✅ Categoría actualizada', 'success');
+                    this.renderMovementsTable();
+                    this.renderDashboard();
+                }
+            });
 
             // Checkbox de selección
             row.querySelector('.item-checkbox').addEventListener('change', (e) => {
@@ -732,6 +785,9 @@ class App {
         document.getElementById('cancel-edit-btn').style.display = 'none';
         
         this.showNotification('Edición cancelada', 'info');
+        
+        // Regresa al dashboard cuando cancela
+        setTimeout(() => this.navigateToSection('dashboard'), 1000);
     }
 
     /**
@@ -908,6 +964,293 @@ class App {
         setTimeout(() => {
             notification.remove();
         }, 3000);
+    }
+
+    /* ================================
+       PRESUPUESTOS
+       ================================ */
+
+    /**
+     * Renderiza la sección de presupuestos
+     */
+    renderBudgets() {
+        const container = document.getElementById('budgets-container');
+        if (!container) return;
+
+        const categories = dataManager.getCategoriesByType('expense');
+        const budgets = dataManager.getBudgets();
+        const alerts = dataManager.getBudgetAlerts();
+
+        // Renderizar alertas
+        const alertsContainer = document.getElementById('budget-alerts');
+        if (alertsContainer) {
+            if (alerts.length === 0) {
+                alertsContainer.innerHTML = '<p style="color: var(--text-secondary); padding: var(--spacing-md); text-align: center;">✅ Todos los presupuestos están bajo control</p>';
+            } else {
+                alertsContainer.innerHTML = alerts.map(alert => `
+                    <div style="padding: var(--spacing-md); background-color: ${alert.type === 'danger' ? 'rgba(255, 68, 33, 0.1)' : 'rgba(255, 193, 7, 0.1)'}; border-left: 4px solid ${alert.type === 'danger' ? '#FF4421' : '#FFC107'}; border-radius: var(--radius-sm); margin-bottom: var(--spacing-sm);">
+                        <strong>${alert.type === 'danger' ? '⚠️ EXCEDIDO' : '⚡ ATENCIÓN'}:</strong> ${alert.message}
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Renderizar tarjetas de presupuesto
+        const cardsContainer = document.getElementById('budget-cards');
+        if (cardsContainer) {
+            cardsContainer.innerHTML = categories.map(cat => {
+                const status = dataManager.getBudgetStatus(cat.id);
+                const currentBudget = budgets[cat.id] || 0;
+                const bgColor = status.exceeded ? 'rgba(255, 68, 33, 0.1)' : status.warning ? 'rgba(255, 193, 7, 0.1)' : 'rgba(168, 229, 113, 0.1)';
+                const barColor = status.exceeded ? '#FF4421' : status.warning ? '#FFC107' : '#A8E571';
+
+                return `
+                    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--spacing-lg); margin-bottom: var(--spacing-md);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md);">
+                            <h4 style="margin: 0; color: var(--text-primary);">${cat.name}</h4>
+                            <input type="number" id="budget-input-${cat.id}" value="${currentBudget}" placeholder="Presupuesto" style="width: 100px; padding: var(--spacing-sm); border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary);">
+                        </div>
+                        <button class="btn btn-sm btn-primary" onclick="app.updateBudget('${cat.id}')">Guardar</button>
+                        
+                        ${currentBudget > 0 ? `
+                            <div style="margin-top: var(--spacing-md);">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: var(--spacing-sm); font-size: var(--font-size-sm);">
+                                    <span>€${status.spent.toFixed(2)} / €${status.budget.toFixed(2)}</span>
+                                    <span>${status.percentage.toFixed(0)}%</span>
+                                </div>
+                                <div style="height: 8px; background: var(--border-color); border-radius: 4px; overflow: hidden;">
+                                    <div style="height: 100%; background: ${barColor}; width: ${Math.min(status.percentage, 100)}%; transition: width 0.3s ease;"></div>
+                                </div>
+                            </div>
+                        ` : '<p style="margin-top: var(--spacing-md); color: var(--text-secondary); font-size: var(--font-size-sm);">Establece un presupuesto para esta categoría</p>'}
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
+    /**
+     * Actualiza un presupuesto
+     */
+    updateBudget(categoryId) {
+        const input = document.getElementById(`budget-input-${categoryId}`);
+        if (!input) return;
+
+        const amount = parseFloat(input.value);
+        if (isNaN(amount) || amount < 0) {
+            this.showNotification('❌ Ingresa un monto válido', 'error');
+            return;
+        }
+
+        dataManager.updateBudget(categoryId, amount);
+        this.showNotification('✅ Presupuesto actualizado', 'success');
+        this.renderBudgets();
+    }
+
+    /* ================================
+       ANÁLISIS COMPARATIVO Y TENDENCIAS
+       ================================ */
+
+    /**
+     * Renderiza el análisis de tendencias
+     */
+    renderAnalytics() {
+        const container = document.getElementById('analytics-container');
+        if (!container) return;
+
+        const trend = dataManager.expenseTrend();
+        const categoryTrends = dataManager.getCategoryTrends();
+        const monthlyExpenses = dataManager.getMonthlyExpenses(12);
+
+        // Resumen de tendencias
+        const trendSummary = document.getElementById('trend-summary');
+        if (trendSummary) {
+            const trendIcon = trend.trend === 'UP' ? '📈' : trend.trend === 'DOWN' ? '📉' : '➡️';
+            const trendColor = trend.trend === 'UP' ? '#FF4421' : trend.trend === 'DOWN' ? '#A8E571' : '#6BD6F1';
+            const sign = trend.difference > 0 ? '+' : '';
+
+            trendSummary.innerHTML = `
+                <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--spacing-xl); text-align: center;">
+                    <div style="font-size: 2.5rem; margin-bottom: var(--spacing-md);">${trendIcon}</div>
+                    <div style="font-size: var(--font-size-lg); font-weight: 600; margin-bottom: var(--spacing-sm);">Tendencia de Gastos</div>
+                    <div style="font-size: 1.5rem; color: ${trendColor}; font-weight: 700; margin-bottom: var(--spacing-sm);">
+                        ${sign}€${Math.abs(trend.difference).toFixed(2)} (${sign}${trend.percentChange.toFixed(1)}%)
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: var(--font-size-sm);">
+                        Mes actual: €${trend.currentMonth.toFixed(2)} vs Mes anterior: €${trend.previousMonth.toFixed(2)}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Tendencias por categoría
+        const categoryTrendsContainer = document.getElementById('category-trends');
+        if (categoryTrendsContainer) {
+            categoryTrendsContainer.innerHTML = Object.values(categoryTrends)
+                .filter(ct => ct.current > 0 || ct.previous > 0)
+                .sort((a, b) => Math.abs(b.difference) - Math.abs(a.difference))
+                .map(ct => {
+                    const trendIcon = ct.trend === 'UP' ? '📈' : ct.trend === 'DOWN' ? '📉' : '➡️';
+                    const trendColor = ct.trend === 'UP' ? '#FF4421' : ct.trend === 'DOWN' ? '#A8E571' : '#6BD6F1';
+                    const sign = ct.difference > 0 ? '+' : '';
+
+                    return `
+                        <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--spacing-lg); margin-bottom: var(--spacing-md);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md);">
+                                <h4 style="margin: 0; color: var(--text-primary);">${ct.name} ${trendIcon}</h4>
+                                <span style="color: ${trendColor}; font-weight: 700; font-size: var(--font-size-base);">
+                                    ${sign}€${Math.abs(ct.difference).toFixed(2)} (${sign}${ct.percentChange.toFixed(1)}%)
+                                </span>
+                            </div>
+                            <div style="font-size: var(--font-size-sm); color: var(--text-secondary);">
+                                Este mes: €${ct.current.toFixed(2)} | Mes anterior: €${ct.previous.toFixed(2)}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+        }
+
+        // Crear gráfico de tendencias mensuales
+        if (monthlyExpenses && document.getElementById('monthly-trend-chart')) {
+            createTrendChart(monthlyExpenses);
+        }
+    }
+
+    /* ================================
+       MOVIMIENTOS RECURRENTES
+       ================================ */
+
+    /**
+     * Renderiza la sección de movimientos recurrentes
+     */
+    renderRecurring() {
+        const container = document.getElementById('recurring-container');
+        if (!container) return;
+
+        const recurring = dataManager.getRecurringMovements();
+        const upcoming = dataManager.getUpcomingRecurringMovements(30);
+
+        // Renderizar recurrentes habilitados
+        const recurringList = document.getElementById('recurring-list');
+        if (recurringList) {
+            if (recurring.length === 0) {
+                recurringList.innerHTML = '<p style="color: var(--text-secondary); padding: var(--spacing-lg); text-align: center;">No hay movimientos recurrentes</p>';
+            } else {
+                recurringList.innerHTML = recurring.map(recur => {
+                    const freq = {
+                        'daily': '📅 Diario',
+                        'weekly': '📆 Semanal',
+                        'monthly': '📊 Mensual',
+                        'yearly': '📈 Anual'
+                    }[recur.frequency] || recur.frequency;
+
+                    return `
+                        <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--spacing-lg); margin-bottom: var(--spacing-md); opacity: ${recur.enabled ? '1' : '0.6'};">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--spacing-md);">
+                                <div>
+                                    <h4 style="margin: 0 0 var(--spacing-sm) 0; color: var(--text-primary);">${recur.description}</h4>
+                                    <div style="font-size: var(--font-size-sm); color: var(--text-secondary); margin-bottom: var(--spacing-sm);">
+                                        ${freq} • €${recur.amount.toFixed(2)} • ${recur.type === 'expense' ? '📉' : recur.type === 'income' ? '📈' : '💾'}
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: var(--spacing-sm);">
+                                    <button class="btn btn-sm" onclick="app.toggleRecurring('${recur.id}')">${recur.enabled ? '✓ Activo' : '✗ Inactivo'}</button>
+                                    <button class="btn btn-sm btn-danger" onclick="app.deleteRecurring('${recur.id}')">Eliminar</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        // Próximos movimientos a aplicar
+        const upcomingList = document.getElementById('upcoming-recurring');
+        if (upcomingList) {
+            if (upcoming.length === 0) {
+                upcomingList.innerHTML = '<p style="color: var(--text-secondary); padding: var(--spacing-lg); text-align: center;">No hay movimientos próximos</p>';
+            } else {
+                upcomingList.innerHTML = upcoming.map(recur => `
+                    <div style="background: rgba(168, 229, 113, 0.1); border-left: 4px solid #A8E571; padding: var(--spacing-lg); border-radius: var(--radius-sm); margin-bottom: var(--spacing-md);">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: var(--spacing-sm);">
+                            <strong>${recur.description}</strong>
+                            <span style="color: #A8E571; font-weight: 700;">€${recur.amount.toFixed(2)}</span>
+                        </div>
+                        <div style="font-size: var(--font-size-sm); color: var(--text-secondary);">
+                            📅 Próximo: ${recur.nextApplyDate}
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+    }
+
+    /**
+     * Agrega un movimiento recurrente
+     */
+    addRecurringMovement() {
+        const description = document.getElementById('recurring-description')?.value;
+        const category = document.getElementById('recurring-category')?.value;
+        const type = document.getElementById('recurring-type')?.value;
+        const amount = parseFloat(document.getElementById('recurring-amount')?.value) || 0;
+        const frequency = document.getElementById('recurring-frequency')?.value;
+        const dayOfMonth = parseInt(document.getElementById('recurring-day')?.value) || null;
+
+        if (!description || !category || !amount || !frequency) {
+            this.showNotification('❌ Completa todos los campos requeridos', 'error');
+            return;
+        }
+
+        dataManager.addRecurringMovement({
+            description,
+            category,
+            type,
+            amount,
+            frequency,
+            dayOfMonth
+        });
+
+        this.showNotification('✅ Movimiento recurrente creado', 'success');
+        document.getElementById('recurring-form')?.reset();
+        this.renderRecurring();
+    }
+
+    /**
+     * Activa/desactiva un movimiento recurrente
+     */
+    toggleRecurring(id) {
+        const recurring = dataManager.getRecurringMovements();
+        const recur = recurring.find(r => r.id === id);
+        if (recur) {
+            dataManager.updateRecurringMovement(id, { enabled: !recur.enabled });
+            this.renderRecurring();
+        }
+    }
+
+    /**
+     * Elimina un movimiento recurrente
+     */
+    deleteRecurring(id) {
+        if (confirm('¿Eliminar este movimiento recurrente?')) {
+            dataManager.deleteRecurringMovement(id);
+            this.showNotification('✅ Movimiento recurrente eliminado', 'success');
+            this.renderRecurring();
+        }
+    }
+
+    /**
+     * Aplica manualmente los movimientos recurrentes pendientes
+     */
+    applyRecurringNow() {
+        const applied = dataManager.applyRecurringMovements();
+        if (applied.length > 0) {
+            this.showNotification(`✅ ${applied.length} movimiento(s) recurrente(s) aplicado(s)`, 'success');
+            this.renderDashboard();
+            this.renderMovementsTable();
+            this.renderRecurring();
+        } else {
+            this.showNotification('No hay movimientos recurrentes para aplicar', 'info');
+        }
     }
 }
 

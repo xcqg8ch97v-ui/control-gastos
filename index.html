@@ -38,6 +38,18 @@
                     <span class="nav-icon">📥</span>
                     <span class="nav-label">Importar BBVA</span>
                 </button>
+                <button class="nav-item" data-section="budgets">
+                    <span class="nav-icon">💰</span>
+                    <span class="nav-label">Presupuestos</span>
+                </button>
+                <button class="nav-item" data-section="analytics">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-label">Análisis</span>
+                </button>
+                <button class="nav-item" data-section="recurring">
+                    <span class="nav-icon">🔄</span>
+                    <span class="nav-label">Recurrentes</span>
+                </button>
                 <button class="nav-item" data-section="settings">
                     <span class="nav-icon">⚙️</span>
                     <span class="nav-label">Ajustes</span>
@@ -140,6 +152,13 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md);">
                         <h3>Movimientos Recientes</h3>
                         <div style="display: flex; gap: var(--spacing-sm);">
+                            <select id="recent-limit" class="filter-select" style="padding: var(--spacing-xs) var(--spacing-sm); border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
+                                <option value="5">Últimos 5</option>
+                                <option value="10">Últimos 10</option>
+                                <option value="15">Últimos 15</option>
+                                <option value="20">Últimos 20</option>
+                                <option value="30">Últimos 30</option>
+                            </select>
                             <select id="recent-sort-by" class="filter-select" style="padding: var(--spacing-xs) var(--spacing-sm); border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
                                 <option value="date-desc">📅 Fecha (Reciente)</option>
                                 <option value="date-asc">📅 Fecha (Antiguo)</option>
@@ -192,7 +211,7 @@
                                     <th>Categoría</th>
                                     <th>Monto</th>
                                     <th>Computable</th>
-                                    <th>Acciones</th>
+                                    <th style="width: 150px;">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody id="movements-tbody-expenses">
@@ -215,7 +234,7 @@
                                     <th>Categoría</th>
                                     <th>Monto</th>
                                     <th>Computable</th>
-                                    <th>Acciones</th>
+                                    <th style="width: 150px;">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody id="movements-tbody-income">
@@ -370,6 +389,112 @@
                     <h3>Mapeo Automático de Categorías</h3>
                     <p class="info-text">El sistema detecta automáticamente categorías basadas en descripciones.</p>
                     <div id="mapping-list" class="mapping-list"></div>
+                </div>
+            </section>
+
+            <!-- Budgets Section -->
+            <section id="budgets" class="section">
+                <div class="section-header">
+                    <h2>💰 Presupuestos</h2>
+                    <p class="section-subtitle">Establece y controla tus presupuestos por categoría</p>
+                </div>
+
+                <div id="budget-alerts" style="margin-bottom: var(--spacing-xl);"></div>
+                <div id="budget-cards"></div>
+            </section>
+
+            <!-- Analytics Section -->
+            <section id="analytics" class="section">
+                <div class="section-header">
+                    <h2>📊 Análisis y Tendencias</h2>
+                    <p class="section-subtitle">Visualiza el comportamiento de tus gastos</p>
+                </div>
+
+                <div id="trend-summary" style="margin-bottom: var(--spacing-xl);"></div>
+
+                <div style="margin-bottom: var(--spacing-xl);">
+                    <h3 style="margin-bottom: var(--spacing-lg);">Tendencias Mensuales últimos 12 meses</h3>
+                    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: var(--spacing-xl);">
+                        <canvas id="monthly-trend-chart"></canvas>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 style="margin-bottom: var(--spacing-lg);">Tendencias por Categoría (Mes Actual vs Anterior)</h3>
+                    <div id="category-trends"></div>
+                </div>
+            </section>
+
+            <!-- Recurring Movements Section -->
+            <section id="recurring" class="section">
+                <div class="section-header">
+                    <h2>🔄 Movimientos Recurrentes</h2>
+                    <p class="section-subtitle">Automatiza transacciones repetidas</p>
+                </div>
+
+                <div style="margin-bottom: var(--spacing-xl); background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: var(--spacing-xl);">
+                    <h3 style="margin-bottom: var(--spacing-lg);">Crear Movimiento Recurrente</h3>
+                    <form id="recurring-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="recurring-description">Descripción *</label>
+                                <input type="text" id="recurring-description" placeholder="Ej: Netflix, Alquiler..." required>
+                            </div>
+                            <div class="form-group">
+                                <label for="recurring-type">Tipo *</label>
+                                <select id="recurring-type" required>
+                                    <option value="expense">📉 Gasto</option>
+                                    <option value="income">📈 Ingreso</option>
+                                    <option value="savings">💾 Ahorro</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="recurring-category">Categoría *</label>
+                                <select id="recurring-category" required>
+                                    <option value="">Selecciona una categoría</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="recurring-amount">Monto (€) *</label>
+                                <input type="number" id="recurring-amount" step="0.01" min="0" required>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="recurring-frequency">Frecuencia *</label>
+                                <select id="recurring-frequency" required>
+                                    <option value="daily">📅 Diaria</option>
+                                    <option value="weekly">📆 Semanal</option>
+                                    <option value="monthly">📊 Mensual</option>
+                                    <option value="yearly">📈 Anual</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="recurring-day">Día del mes (para mensuales)</label>
+                                <input type="number" id="recurring-day" min="1" max="31" placeholder="15">
+                            </div>
+                        </div>
+
+                        <button type="button" class="btn btn-primary" onclick="app.addRecurringMovement()">Crear Recurrente</button>
+                    </form>
+                </div>
+
+                <div style="display: flex; gap: var(--spacing-md); margin-bottom: var(--spacing-xl);">
+                    <button class="btn btn-secondary" onclick="app.applyRecurringNow()">🔄 Aplicar Ahora</button>
+                </div>
+
+                <div style="margin-bottom: var(--spacing-xl);">
+                    <h3 style="margin-bottom: var(--spacing-lg);">Movimientos Recurrentes Configurados</h3>
+                    <div id="recurring-list"></div>
+                </div>
+
+                <div>
+                    <h3 style="margin-bottom: var(--spacing-lg);">Próximos a Aplicar (30 días)</h3>
+                    <div id="upcoming-recurring"></div>
                 </div>
             </section>
 
