@@ -974,9 +974,6 @@ class App {
      * Renderiza la sección de presupuestos
      */
     renderBudgets() {
-        const container = document.getElementById('budgets-container');
-        if (!container) return;
-
         const categories = dataManager.getCategoriesByType('expense');
         const budgets = dataManager.getBudgets();
         const alerts = dataManager.getBudgetAlerts();
@@ -1055,9 +1052,6 @@ class App {
      * Renderiza el análisis de tendencias
      */
     renderAnalytics() {
-        const container = document.getElementById('analytics-container');
-        if (!container) return;
-
         const trend = dataManager.expenseTrend();
         const categoryTrends = dataManager.getCategoryTrends();
         const monthlyExpenses = dataManager.getMonthlyExpenses(12);
